@@ -1,6 +1,7 @@
 import { useEntity, useSearch } from '@/composables'
 import { BaseTableHeaderI } from '@/interfaces/base-table'
 import { SearchCorpTypes } from '@/resources'
+import { getFeatureFlag  } from '@/utils'
 
 const { getEntityCode, getEntityDescription } = useEntity()
 const { filterSearch, highlightMatch } = useSearch()
@@ -17,7 +18,7 @@ export const BusinessSearchHeaders: BaseTableHeaderI[] = [
     },
     hasFilter: true,
     hasSort: true,
-    itemFn: highlightMatch,
+    itemFn: getFeatureFlag('advanced-highlighting') ? null : highlightMatch,
     slotId: 'name',
     value: 'Business Name',
     width: '26%'

@@ -26,7 +26,7 @@ from flask import current_app
 
 from search_api.exceptions import SolrException
 
-from .solr_docs import BusinessDoc
+from .solr_docs import BusinessDoc, PartyDoc
 from .solr_fields import SolrField
 
 
@@ -304,10 +304,124 @@ class Solr:
         return {'fields': facets}
 
     @staticmethod
-    def prep_query_str(query: str) -> str:
+    def prep_query_str(query: str, replace_handled_chars=True) -> str:
         """Return query string prepped for solr call."""
         # replace solr specific special chars
         rmv_spec_chars_rgx = r'([\[\]!()\"~*?:/\\={}^%`#|<>,.@$;_\-])'
         handled_spec_chars_rgx = r'([&+]+)'
         query = re.sub(rmv_spec_chars_rgx, ' ', query.lower())
+        if not replace_handled_chars:
+            return query
         return re.sub(handled_spec_chars_rgx, r' \\\1 ', query) if not query.isspace() else r'\*'
+
+    @staticmethod
+    def highlight_docs(query: str, docs: List[BusinessDoc | PartyDoc], highlight_field: SolrField) -> List[BusinessDoc]:
+        """Highlight terms in names within docs."""
+        HL_START = '<b>'
+        HL_END = '</b>'
+
+        def hl_conflict_adjust(name_to_check: str, term: str, pos: int, offset=0) -> int:
+            """Adjust highlight position against previous highlighting chars in the name.
+                -> if conflicting with previous highlighting returns -1
+                -> if after existing highlighting adds offset for chars and checks for more recursively
+                -> else (no other highlighting) returns pos
+            """
+            prev_hl_start = re.search(HL_START, name_to_check)
+            prev_hl_end = re.search(HL_END, name_to_check)
+
+            pos_offsetted = pos - offset
+
+            if prev_hl_start and prev_hl_end:
+                prev_hl_start = prev_hl_start.start()
+                prev_hl_end = prev_hl_end.start()
+                overlaps_start = pos_offsetted <= prev_hl_start and pos_offsetted + len(term) >= prev_hl_start
+                overlaps_end = (pos_offsetted <= (prev_hl_start + len(HL_START)) and
+                                (pos_offsetted + len(term)) >= (prev_hl_end + len(HL_START)))
+
+                if overlaps_start or overlaps_end:
+                    # highlighting is overlapping -- skip
+                    return -1
+                elif pos_offsetted >= prev_hl_end - len(HL_START):
+                    # highlighting is after previous one so add offset and check for other highlighting further on
+                    # NB: substring recursively further along(i.e. '<b>TEST</b>ING FURTHER ALONG' -> 'ING FURTHER ALONG')
+                    # NB: offset for cleaned_name pos (i.e. 'testing further along' -> 'ing further along')
+                    adjusted_pos = hl_conflict_adjust(name_to_check[prev_hl_end + len(HL_END):],
+                                                      term,
+                                                      pos,
+                                                      offset + prev_hl_end - len(HL_START))
+
+                    if adjusted_pos == -1:
+                        # -1 anywhere is an overlap
+                        return -1
+                    return adjusted_pos + len(HL_START) + len(HL_END)
+            return pos
+
+        def get_hl_position(name: str, cleaned_name: str, term: str, offset=0) -> int:
+            """Return the highlight position start.
+                -> if it conflicts with existing highlighting returns -1 (checks another name recursively first)
+                -> if there's nothing to highlight returns null
+                -> else returns highlight position
+            """
+            # get cleaned term name position (must be the beginning of the word)
+            print(f'get_hl_position term {term} offset {offset}')
+            term_regex = rf'(^|\s)' + re.escape(term)
+            print(cleaned_name[offset:])
+            print(name)
+            matchInfo = re.search(term_regex, cleaned_name[offset:])
+            if not matchInfo:
+                # no name
+                return None
+
+            pos = matchInfo.start() + offset
+            print(f'pos and offset {pos}')
+            # check for previous highlighting and offset pos if needed
+            pos_adjusted = hl_conflict_adjust(name, term, pos)
+            print(f'pos_adjusted {pos_adjusted}')
+            if pos_adjusted == -1:
+                # conflicts with other highlighting so check for a name later in the string
+                substring_pos = get_hl_position(name, cleaned_name, term, pos + len(term) + 1)
+                print(f'substring_pos {substring_pos}')
+                if substring_pos != -1:
+                    return substring_pos
+                return -1  # matched but conflicted in all cases
+
+            return pos_adjusted
+
+        # NB: important to highlight longer words first
+        terms = query.split()
+        terms.sort(key=len, reverse=True)
+        print(terms)
+        highlighted_docs = []
+        for doc in docs:
+            name = doc[highlight_field]
+            cleaned_name = Solr.prep_query_str(name, False)
+            # highlight by term
+            for term, i in zip(terms, range(len(terms))):
+                # check if its a substring of a different term
+                is_substring = any(term in x for x in terms[:i])
+                # get cleaned term
+                cleanedTerm = Solr.prep_query_str(term, False)
+                # remove letters one by one until it matches something(handles stemming)
+                for i in range(len(cleanedTerm), 0, -1):
+                    # get highlight start position
+                    pos = get_hl_position(name, cleaned_name, cleanedTerm[0:i])
+                    print(f'final pos {pos}')
+                    if pos != None:
+                        if pos == -1:
+                            break  # conflicts with other highlighting - - skip
+                        # highlight term
+                        elif pos == 0:
+                            name = f'{HL_START}{name[0:i]}{HL_END}{name[i:]}'
+                        else:
+                            start = name[0:pos]
+                            # NB: + 1 accounts for the space at the beginning(i.e. ' name')
+                            highlight = f'{HL_START}{name[pos:pos + i + 1]}{HL_END}'
+                            end = name[pos + i + 1:]
+                            name = f'{start}{highlight}{end}'
+                        break
+                    if is_substring:
+                        # don't decrement word further
+                        break
+            doc[highlight_field] = name
+            highlighted_docs.append(doc)
+        return highlighted_docs

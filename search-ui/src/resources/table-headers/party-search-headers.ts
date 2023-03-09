@@ -1,5 +1,6 @@
 import { useSearch } from '@/composables'
 import { BaseTableHeaderI } from '@/interfaces/base-table'
+import { getFeatureFlag  } from '@/utils'
 
 const { filterSearch, highlightMatch } = useSearch()
 
@@ -15,7 +16,7 @@ export const PartySearchHeaders: BaseTableHeaderI[] = [
     },
     hasFilter: true,
     hasSort: true,
-    itemFn: highlightMatch,
+    itemFn: getFeatureFlag('advanced-highlighting') ? null : highlightMatch,
     slotId: 'name',
     value: 'Owner Name',
     width: '20%'

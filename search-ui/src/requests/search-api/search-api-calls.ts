@@ -11,6 +11,7 @@ import {
 } from '@/interfaces'
 import { DocumentTypeDescriptions } from '@/resources'
 import { Document } from '@/types'
+import { getFeatureFlag  } from '@/utils'
 // internal
 import { addSearchBusFilters, addSearchPartyFilters, getSearchConfig, parseGatewayError } from './search-api-utils'
 
@@ -47,7 +48,12 @@ export async function searchBusiness(
 ): Promise<SearchResponseI> {
   if (!searchValue) return
   // basic params
-  const params = { query: `value:${searchValue}`, start: start * rows, rows: rows }
+  const params = {
+    query: `value:${searchValue}`,
+    start: start * rows,
+    rows: rows,
+    hl: getFeatureFlag('advanced-highlighting')
+  }
   // add filters
   const filterParams = addSearchBusFilters(filters)
   if (filterParams.query) params.query += filterParams.query
@@ -85,7 +91,8 @@ export async function searchParties(
     query: `value:${searchValue}`,
     categories: 'partyRoles:partner,proprietor',
     start: start * rows,
-    rows: rows
+    rows: rows,
+    hl: getFeatureFlag('advanced-highlighting')
   }
   // add filters
   const filterParams = addSearchPartyFilters(filters)

@@ -95,11 +95,19 @@ def facets():  # pylint: disable=too-many-branches, too-many-locals
         # TODO: add parties filter
         # parse paging params
         start = None
-        with suppress(TypeError):
-            start = int(request.args.get('start', None))
         rows = None
-        with suppress(TypeError):
-            rows = int(request.args.get('rows', None))
+        try:
+            with suppress(TypeError):  # suprress int cast over None
+                start = int(request.args.get('start', None))
+                rows = int(request.args.get('rows', None))
+        except ValueError as err:  # catch invalid start/row entry
+            return {'message': "Expected integer for params: 'start', 'rows'"}, HTTPStatus.BAD_REQUEST
+
+        highlight_names = False
+        try:
+            highlight_names = bool(request.args.get('hl', False))
+        except ValueError as err:
+            return {'message': "Expected boolean for 'hl' param"}, HTTPStatus.BAD_REQUEST
 
         # create solr search params obj from parsed params
         params = SearchParams(query, start, rows, legal_types, states)
@@ -123,6 +131,8 @@ def facets():  # pylint: disable=too-many-branches, too-many-locals
                 'totalResults': results.get('response', {}).get('numFound'),
                 'results': results.get('response', {}).get('docs')}}
 
+        if highlight_names:
+            response['searchResults']['results'] = Solr.highlight_docs(query['value'], response['searchResults']['results'], SolrField.NAME)
         return jsonify(response), HTTPStatus.OK
 
     except SolrException as solr_exception:
@@ -191,11 +201,19 @@ def parties():  # pylint: disable=too-many-branches, too-many-return-statements,
                                        "'proprietor'. Other partyRoles are not implemented."}), HTTPStatus.BAD_REQUEST
 
         start = None
-        with suppress(TypeError):
-            start = int(request.args.get('start', None))
         rows = None
-        with suppress(TypeError):
-            rows = int(request.args.get('rows', None))
+        try:
+            with suppress(TypeError):  # suprress int cast over None
+                start = int(request.args.get('start', None))
+                rows = int(request.args.get('rows', None))
+        except ValueError as err:  # catch invalid start/row entry
+            return {'message': "Expected integer for params: 'start', 'rows'"}, HTTPStatus.BAD_REQUEST
+
+        highlight_names = False
+        try:
+            highlight_names = bool(request.args.get('hl', False))
+        except ValueError as err:
+            return {'message': "Expected boolean for 'hl' param"}, HTTPStatus.BAD_REQUEST
 
         params = SearchParams(query, start, rows, legal_types, states, party_roles)
         results = parties_search(params)
@@ -218,6 +236,9 @@ def parties():  # pylint: disable=too-many-branches, too-many-return-statements,
                     'start': results.get('response', {}).get('start')},
                 'totalResults': results.get('response', {}).get('numFound'),
                 'results': results.get('response', {}).get('docs')}}
+
+        if highlight_names:
+            response['searchResults']['results'] = Solr.highlight_docs(query['value'], response['searchResults']['results'], SolrField.PARTY_NAME)
 
         return jsonify(response), HTTPStatus.OK
 
