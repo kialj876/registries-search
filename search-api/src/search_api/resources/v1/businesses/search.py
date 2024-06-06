@@ -245,14 +245,28 @@ def suggest():
             return jsonify({'message': "Expected url param 'query'."}), HTTPStatus.BAD_REQUEST
         query = Solr.prep_query_str(query)
 
-        rows = None
-        with suppress(TypeError):
-            rows = int(request.args.get('rows', None))
+        # rows = None
+        # with suppress(TypeError):
+        #     rows = int(request.args.get('rows', None))
 
-        highlight = bool(request.args.get('highlight', False))
+        # highlight = bool(request.args.get('highlight', False))
 
-        suggestions = business_suggest(query, highlight, rows)
-        return jsonify({'queryInfo': {'rows': rows, 'highlight': highlight, 'query': query},
+        # suggestions = business_suggest(query, highlight, rows)
+
+        params = SearchParams({'value': query}, 0, 5)
+        results = business_search(params)
+        def _get_suggestion_info(search_value: str, result: dict[str,str]):
+            result_type = 'name'
+            if not search_value in result['name']:
+                if search_value.upper() in result['identifier']:
+                    result_type = 'identifier'
+                elif result.get('bn') and search_value in result['bn']:
+                    result_type = 'bn'
+            return {'type': result_type, 'value': result[result_type]}
+
+        suggestions = [_get_suggestion_info(query, x) for x in results.get('response', {}).get('docs', [])]
+
+        return jsonify({'queryInfo': {'rows': 5, 'highlight': False, 'query': query},
                         'results': suggestions}), HTTPStatus.OK
 
     except SolrException as solr_exception:

@@ -16,7 +16,7 @@ BC Registries Registry Search SOLR
 2. Run your solr container
 
 - if first time:
-  - for a persistent index: `docker run -d -p 8983:8983 -v /<YOUR_PATH_TO_THIS_REPO>/registries-search/search-solr/bitnami:/bitnami --name solr-local bitnami/solr:9.0.0` (it will be available on port 8983)
+  - for a persistent index: `docker run -d -p 8983:8983 -v $PWD/bitnami:/bitnami --name solr-local bitnami/solr:9.0.0` (it will be available on port 8983)
   - for a temp index (changes will not persist -- use for search-api unit tests):
     - `docker build . -t solr-test`
     - `docker run -it --name=solr-test -p 8999:8983 solr-test` (it will be available on port 8999)

@@ -93,7 +93,8 @@ def _collect_lear_data_gcp():
     current_app.logger.debug('Collecting LEAR data...')
     cur.execute("""
         SELECT le.identifier,le.legal_name,le.entity_type as legal_type,le.founding_date,
-            le.restoration_expiry_date,le.last_ar_date,alt.name as legal_name_alt,
+            le.restoration_expiry_date,le.last_ar_date,le.state,
+            alt.name as legal_name_alt,
             er.role_type as role,er.appointment_date,
             rle.first_name,rle.middle_initial,rle.last_name,rle.id as party_id,rle.legal_name as organization_name,
             rle_alt.name as organization_name_alt,
@@ -102,10 +103,6 @@ def _collect_lear_data_gcp():
                  THEN 'organization'
                  ELSE 'person'
                  END party_type,
-            CASE WHEN le.state = 'LIQUIDATION'
-                 THEN 'ACTIVE'
-                 ELSE le.state
-                 END state,
             CASE WHEN alt.bn15 IS NOT NULL
                  THEN alt.bn15
                  ELSE le.tax_id
@@ -113,13 +110,13 @@ def _collect_lear_data_gcp():
         FROM legal_entities le
             LEFT JOIN alternate_names alt
                 ON alt.legal_entity_id = le.id
-                    AND alt.name_type = 'OPERATING'
+                    AND alt.name_type = 'DBA'
                     AND alt.end_date IS NULL
             LEFT JOIN entity_roles er ON er.legal_entity_id = le.id
             LEFT JOIN legal_entities rle ON rle.id = er.related_entity_id
             LEFT JOIN alternate_names rle_alt
                 ON rle_alt.legal_entity_id = rle.id
-                    AND rle_alt.name_type = 'OPERATING'
+                    AND rle_alt.name_type = 'DBA'
                     AND rle_alt.end_date IS NULL
             LEFT JOIN colin_entities rle_colin ON rle_colin.id = er.related_colin_entity_id
         WHERE le.entity_type in ('BEN', 'CP', 'SP', 'GP')

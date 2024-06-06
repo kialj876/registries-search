@@ -65,11 +65,11 @@ def update_solr(base_docs: list[BusinessDoc], data_name: str) -> int:
 def load_search_core():  # pylint: disable=too-many-statements
     """Load data from LEAR and COLIN into the search core."""
     try:
-        colin_data_cur = collect_colin_data()
-        colin_data = colin_data_cur.fetchall()
-        current_app.logger.debug('Prepping COLIN data...')
-        prepped_colin_data = prep_data(colin_data, colin_data_cur, 'COLIN')
-        current_app.logger.debug(f'{len(prepped_colin_data)} COLIN records ready for import.')
+        # colin_data_cur = collect_colin_data()
+        # colin_data = colin_data_cur.fetchall()
+        # current_app.logger.debug('Prepping COLIN data...')
+        # prepped_colin_data = prep_data(colin_data, colin_data_cur, 'COLIN')
+        # current_app.logger.debug(f'{len(prepped_colin_data)} COLIN records ready for import.')
         lear_data_cur = collect_lear_data()
         lear_data = lear_data_cur.fetchall()
         current_app.logger.debug('Prepping LEAR data...')
@@ -80,11 +80,11 @@ def load_search_core():  # pylint: disable=too-many-statements
             current_app.logger.debug('REINDEX_CORE set: deleting current solr index...')
             search_solr.delete_all_docs()
         # execute update to solr in batches
-        current_app.logger.debug('Importing records from COLIN...')
-        count = update_solr(prepped_colin_data, 'COLIN')
-        current_app.logger.debug('COLIN import completed.')
+        # current_app.logger.debug('Importing records from COLIN...')
+        # count = update_solr(prepped_colin_data, 'COLIN')
+        # current_app.logger.debug('COLIN import completed.')
         current_app.logger.debug('Importing records from LEAR...')
-        count += update_solr(prepped_lear_data, 'LEAR')
+        count = update_solr(prepped_lear_data, 'LEAR')
         current_app.logger.debug('LEAR import completed.')
         current_app.logger.debug(f'Total records imported: {count}')
 
